@@ -1,0 +1,119 @@
+/* Styling modeled directly on tracker.debian.org: crimson boxed-panel
+ * headers, white panel bodies with thin borders, blue primary action
+ * buttons, and a plain white page. */
+
+.debts-page {
+    background: #ffffff;
+    border: 2px solid #1a1a1a;
+}
+
+headerbar {
+    background: #a80030;
+    color: #ffffff;
+    box-shadow: none;
+    border: none;
+}
+
+headerbar label,
+headerbar button {
+    color: #ffffff;
+}
+
+headerbar button {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.35);
+}
+
+headerbar button:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+.debts-jumpbox entry {
+    min-width: 120px;
+}
+
+/* --- boxed panels, like the "general" / "bugs" / "links" boxes on
+ * tracker.debian.org: a solid crimson title strip over a bordered white
+ * body --- */
+
+.debts-panel {
+    background: #ffffff;
+    border: 1px solid #cfc9c2;
+}
+
+.debts-panel-title {
+    background: #a80030;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 4px 10px;
+}
+
+.bts-sidebar {
+    background: #ffffff;
+}
+
+.bts-sidebar row {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eeeae4;
+}
+
+.bts-sidebar row:selected {
+    background: #ffe3ea;
+    color: #222222;
+}
+
+treeview.view {
+    background: #ffffff;
+}
+
+treeview.view header button {
+    background: #f0ece7;
+    border: none;
+    border-bottom: 2px solid #a80030;
+    font-weight: bold;
+    padding: 6px;
+}
+
+treeview.view:selected {
+    background: #ffe3ea;
+    color: #222222;
+}
+
+.bts-bugnumber {
+    font-family: monospace;
+    color: #a80030;
+    font-weight: bold;
+}
+
+.bts-status-open {
+    color: #b45300;
+    font-weight: bold;
+}
+
+.bts-status-done {
+    color: #217a3c;
+    font-weight: bold;
+}
+
+.bts-message-view {
+    font-family: monospace;
+    background: #fffdf9;
+}
+
+.bts-command-help {
+    color: #666666;
+    font-style: italic;
+}
+
+/* primary action buttons (Send, Submit, Save) - the blue "Subscribe"-style
+ * button from the tracker, not the crimson panel color */
+button.suggested-action {
+    background: #1e73be;
+    background-image: none;
+    color: #ffffff;
+    border: 1px solid #175a96;
+}
+
+button.suggested-action:hover {
+    background: #185f9e;
+}
