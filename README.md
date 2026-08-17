@@ -82,4 +82,4 @@ to `/usr/share/debts/style.css` (respects `DESTDIR`).
 
 ## License
 
-GPL-3.0-or-later (see the About dialog).
+GPL-3.0
