@@ -105,6 +105,32 @@ treeview.view:selected {
     font-style: italic;
 }
 
+.debts-navbar {
+    background: #f0ece7;
+    border-bottom: 1px solid #cfc9c2;
+}
+
+.debts-bug-toolbar {
+    background: rgba(168, 0, 48, 0.94);
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.debts-bug-toolbar button {
+    color: #ffffff;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.35);
+}
+
+.debts-bug-toolbar button:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.debts-bug-toolbar-label {
+    color: #ffffff;
+    font-weight: bold;
+}
+
 /* primary action buttons (Send, Submit, Save) - the blue "Subscribe"-style
  * button from the tracker, not the crimson panel color */
 button.suggested-action {

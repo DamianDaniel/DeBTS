@@ -3,8 +3,11 @@
 #include "compose_window.h"
 #include "control_window.h"
 #include "bug_detail_window.h"
+#include "search_window.h"
+#include "browser_view.h"
 #include "mailer.h"
 #include "bug.h"
+#include "udd.h"
 
 #define DEBTS_APP_NAME "Debian BTS Client"
 
@@ -25,23 +28,34 @@ typedef struct {
     GtkWidget *status_bar;
     GtkWidget *refresh_btn;
     GtkWidget *jump_entry;
-    gint filter_mode; /* 0 = all, 1 = open, 2 = done */
+    gint filter_mode; /* 0 all, 1 open, 2 done */
 } MainUi;
 
 typedef struct {
     AppContext *ctx;
     MainUi *ui;
     GList *headers;
+    GList *web_bugs; /* bugs tied to your email, from bugs.debian.org */
     GError *error;
 } FetchResult;
 
 static gboolean apply_fetch_result_idle(gpointer data);
 
+/* pulls IMAP mail, and if logged in, bugs tied to your email */
 static gpointer
 fetch_thread_func(gpointer data)
 {
     FetchResult *res = data;
     res->headers = mailer_list_headers(res->ctx->cfg, &res->error);
+
+    if (!res->error && res->ctx->cfg->from_email && *res->ctx->cfg->from_email) {
+        BtsSearchQuery q = {0};
+        q.submitter = res->ctx->cfg->from_email;
+        GError *web_error = NULL;
+        res->web_bugs = udd_search(&q, &web_error);
+        if (web_error) g_error_free(web_error); /* not fatal, just skip */
+    }
+
     g_idle_add(apply_fetch_result_idle, res);
     return NULL;
 }
@@ -67,6 +81,32 @@ populate_store_from_bugs(GtkListStore *store, GList *bugs)
     }
 }
 
+/* folds web-known bugs into the local list, newest first */
+static GList *
+merge_web_bugs(GList *local_bugs, GList *web_bugs)
+{
+    GHashTable *by_number = g_hash_table_new(g_direct_hash, g_direct_equal);
+    for (GList *l = local_bugs; l; l = l->next) {
+        Bug *b = l->data;
+        g_hash_table_insert(by_number, GINT_TO_POINTER(b->number), b);
+    }
+
+    for (GList *l = web_bugs; l; l = l->next) {
+        Bug *wb = l->data;
+        Bug *existing = g_hash_table_lookup(by_number, GINT_TO_POINTER(wb->number));
+        if (existing) {
+            bug_apply_summary(existing, wb);
+            bug_free(wb);
+        } else {
+            local_bugs = g_list_prepend(local_bugs, wb);
+        }
+    }
+    g_list_free(web_bugs); /* elements now either freed or owned by local_bugs */
+    g_hash_table_destroy(by_number);
+
+    return local_bugs;
+}
+
 static gboolean
 apply_fetch_result_idle(gpointer data)
 {
@@ -82,18 +122,17 @@ apply_fetch_result_idle(gpointer data)
         g_free(msg);
         g_error_free(res->error);
     } else {
-        /* replace cached headers/bugs */
         g_list_free_full(ctx->headers, (GDestroyNotify) mail_header_free);
         ctx->headers = res->headers;
 
         g_list_free_full(ctx->bugs, (GDestroyNotify) bug_free);
         ctx->bugs = bug_group_from_headers(ctx->headers);
+        ctx->bugs = merge_web_bugs(ctx->bugs, res->web_bugs);
 
         GtkTreeModel *base = gtk_tree_model_filter_get_model(ui->filtered);
         populate_store_from_bugs(GTK_LIST_STORE(base), ctx->bugs);
 
-        gchar *msg = g_strdup_printf("%d bug thread(s) found in \xE2\x80\x9C%s\xE2\x80\x9D.",
-            g_list_length(ctx->bugs), ctx->cfg->imap_folder);
+        gchar *msg = g_strdup_printf("%d bug thread(s).", g_list_length(ctx->bugs));
         gtk_label_set_text(GTK_LABEL(ui->status_bar), msg);
         g_free(msg);
     }
@@ -142,6 +181,45 @@ on_control_clicked(GtkButton *btn, gpointer user_data)
 }
 
 static void
+on_search_clicked(GtkButton *btn, gpointer user_data)
+{
+    (void) btn;
+    MainUi *ui = user_data;
+    search_window_show(ui->ctx);
+}
+
+static void
+on_browse_clicked(GtkButton *btn, gpointer user_data)
+{
+    (void) btn;
+    MainUi *ui = user_data;
+    gtk_stack_set_visible_child_name(GTK_STACK(ui->ctx->content_stack), "browser");
+}
+
+void
+main_window_browse_url(AppContext *ctx, const gchar *url)
+{
+    gtk_stack_set_visible_child_name(GTK_STACK(ctx->content_stack), "browser");
+    browser_view_load(ctx->browser_view, url);
+}
+
+void
+main_window_browse_bug(AppContext *ctx, gint bug_number)
+{
+    gchar *url = g_strdup_printf("https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=%d", bug_number);
+    main_window_browse_url(ctx, url);
+    g_free(url);
+}
+
+static void
+on_list_clicked(GtkButton *btn, gpointer user_data)
+{
+    (void) btn;
+    MainUi *ui = user_data;
+    gtk_stack_set_visible_child_name(GTK_STACK(ui->ctx->content_stack), "list");
+}
+
+static void
 on_settings_clicked(GtkButton *btn, gpointer user_data)
 {
     (void) btn;
@@ -154,17 +232,18 @@ on_about_clicked(GtkButton *btn, gpointer user_data)
 {
     (void) btn;
     MainUi *ui = user_data;
-    const gchar *authors[] = { "You", NULL };
+    const gchar *authors[] = { "Damian Daniel <damian@danielovci.net>", NULL };
     gtk_show_about_dialog(GTK_WINDOW(ui->ctx->main_window),
         "program-name", DEBTS_APP_NAME,
         "version", "0.1",
+        "copyright", "Copyright \xC2\xA9 2026 Damian Daniel",
         "comments", "A friendly desktop client for the Debian Bug Tracking System,\n"
                     "talking to it entirely over your own IMAP/SMTP mail account -\n"
                     "no other mail client required.",
         "website", "https://www.debian.org/Bugs/",
         "website-label", "Debian BTS documentation",
         "authors", authors,
-        "license-type", GTK_LICENSE_GPL_3_0,
+        "license-type", GTK_LICENSE_GPL_3_0_ONLY,
         NULL);
 }
 
@@ -176,7 +255,7 @@ on_jump_go_clicked(GtkButton *btn, gpointer user_data)
     const gchar *text = gtk_entry_get_text(GTK_ENTRY(ui->jump_entry));
     if (!text || !*text) return;
 
-    /* Accept "123456" or "#123456" or "Bug#123456". */
+    /* accepts "123456", "#123456", or "Bug#123456" */
     while (*text && !g_ascii_isdigit(*text)) text++;
     gint number = atoi(text);
     if (number <= 0) {
@@ -186,16 +265,14 @@ on_jump_go_clicked(GtkButton *btn, gpointer user_data)
 
     for (GList *l = ui->ctx->bugs; l; l = l->next) {
         Bug *b = l->data;
-        if (b->number == number) {
+        if (b->number == number && b->headers) {
             bug_detail_window_show(ui->ctx, b);
             return;
         }
     }
-    gchar *msg = g_strdup_printf(
-        "Bug #%d isn't in your loaded mail - it may not be in \xE2\x80\x9C%s\xE2\x80\x9D, "
-        "or you need to hit Refresh.", number, ui->ctx->cfg->imap_folder);
-    gtk_label_set_text(GTK_LABEL(ui->status_bar), msg);
-    g_free(msg);
+
+    /* not in your own mail - open the real bug page instead */
+    main_window_browse_bug(ui->ctx, number);
 }
 
 static void
@@ -211,7 +288,13 @@ on_row_activated(GtkTreeView *tv, GtkTreePath *path, GtkTreeViewColumn *col, gpo
     GtkTreeModel *base = gtk_tree_model_filter_get_model(ui->filtered);
     Bug *b = NULL;
     gtk_tree_model_get(base, &child_iter, COL_BUG_PTR, &b, -1);
-    if (b) bug_detail_window_show(ui->ctx, b);
+    if (!b) return;
+
+    if (b->headers) {
+        bug_detail_window_show(ui->ctx, b);
+    } else {
+        main_window_browse_bug(ui->ctx, b->number);
+    }
 }
 
 static gboolean
@@ -355,6 +438,21 @@ main_window_show(AppContext *ctx)
     g_signal_connect(control_btn, "clicked", G_CALLBACK(on_control_clicked), ui);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), control_btn);
 
+    GtkWidget *search_btn = gtk_button_new_from_icon_name("edit-find-symbolic", GTK_ICON_SIZE_BUTTON);
+    gtk_widget_set_tooltip_text(search_btn, "Search the BTS");
+    g_signal_connect(search_btn, "clicked", G_CALLBACK(on_search_clicked), ui);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(header), search_btn);
+
+    GtkWidget *view_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(view_box), "linked");
+    GtkWidget *list_btn = gtk_button_new_with_label("List");
+    g_signal_connect(list_btn, "clicked", G_CALLBACK(on_list_clicked), ui);
+    GtkWidget *browse_btn = gtk_button_new_with_label("Browse BTS");
+    g_signal_connect(browse_btn, "clicked", G_CALLBACK(on_browse_clicked), ui);
+    gtk_box_pack_start(GTK_BOX(view_box), list_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(view_box), browse_btn, FALSE, FALSE, 0);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(header), view_box);
+
     GtkWidget *settings_btn = gtk_button_new_from_icon_name("preferences-system-symbolic", GTK_ICON_SIZE_BUTTON);
     gtk_widget_set_tooltip_text(settings_btn, "Account settings");
     g_signal_connect(settings_btn, "clicked", G_CALLBACK(on_settings_clicked), ui);
@@ -387,9 +485,16 @@ main_window_show(AppContext *ctx)
     gtk_widget_set_margin_top(paned, 10);
     gtk_paned_set_wide_handle(GTK_PANED(paned), TRUE);
     gtk_box_pack_start(GTK_BOX(root), paned, TRUE, TRUE, 0);
+
+    ctx->content_stack = gtk_stack_new();
+    gtk_widget_set_hexpand(ctx->content_stack, TRUE);
     GtkWidget *treeview_widget = build_treeview(ui);
+    gtk_stack_add_named(GTK_STACK(ctx->content_stack), treeview_widget, "list");
+    ctx->browser_view = browser_view_new(ctx);
+    gtk_stack_add_named(GTK_STACK(ctx->content_stack), ctx->browser_view, "browser");
+
     gtk_paned_pack1(GTK_PANED(paned), build_sidebar(ui), FALSE, FALSE);
-    gtk_paned_pack2(GTK_PANED(paned), treeview_widget, TRUE, FALSE);
+    gtk_paned_pack2(GTK_PANED(paned), ctx->content_stack, TRUE, FALSE);
 
     ui->status_bar = gtk_label_new(
         "Set up your account in Settings, then hit Refresh to load bugs from your mail folder.");

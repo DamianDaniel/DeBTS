@@ -5,21 +5,22 @@
 #include "mailer.h"
 
 typedef struct {
-    gint number;          /* 0 if unknown */
-    gchar *package;       /* may be NULL/unknown */
+    gint number;
+    gchar *package;
     gchar *title;
-    gchar *severity;      /* may be NULL/unknown */
-    gchar *status;         /* "open" / "done" - best-effort guess from subject */
-    GList *headers;        /* GList<MailHeader*> belonging to this bug, oldest first */
+    gchar *severity;
+    gchar *status;      /* open or done, best guess */
+    GList *headers;      /* mail in your IMAP folder, oldest first */
 } Bug;
 
 void bug_free(Bug *b);
 
-/* Groups a flat list of MailHeader* (as returned by mailer_list_headers)
- * into per-bug threads by scanning Subject lines for "Bug#NNNNNN".
- * Headers that don't look like BTS traffic are skipped.
- * Returns GList<Bug*> sorted by bug number descending (most recent first),
- * does NOT take ownership of `headers`. */
+/* Groups mail headers into bug threads by their Bug# subject.
+ * Skips mail that isn't BTS traffic. Newest bug first. */
 GList *bug_group_from_headers(GList *headers);
+
+/* Copies package/title/severity/status from src into dst,
+ * keeping dst's own value where src has none. */
+void bug_apply_summary(Bug *dst, const Bug *src);
 
 #endif /* BTS_BUG_H */

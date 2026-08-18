@@ -16,8 +16,9 @@ detail_action_ctx_free(gpointer data)
     g_free(d);
 }
 
+/* shows one bug's local IMAP thread, message by message */
 static void
-load_thread_into_view(GtkTextView *view, AppConfig *cfg, GList *headers)
+load_thread_from_imap(GtkTextView *view, AppConfig *cfg, GList *headers)
 {
     GtkTextBuffer *buf = gtk_text_view_get_buffer(view);
     GtkTextIter end;
@@ -65,6 +66,7 @@ on_control_clicked(GtkButton *btn, gpointer user_data)
     control_window_show_for_bug(d->ctx, d->bug_number, "retitle");
 }
 
+/* shows the full local mail thread for a bug in your own IMAP folder */
 void
 bug_detail_window_show(AppContext *ctx, Bug *bug)
 {
@@ -109,7 +111,6 @@ bug_detail_window_show(AppContext *ctx, Bug *bug)
     d->ctx = ctx;
     d->bug_number = bug->number;
     d->subject_hint = g_strdup_printf("Bug#%d: %s", bug->number, bug->title ? bug->title : "");
-    /* Both buttons share the same context; free it once, when the window closes. */
     g_object_set_data_full(G_OBJECT(window), "detail-action-ctx", d, detail_action_ctx_free);
 
     GtkWidget *reply_btn = gtk_button_new_with_label("Reply\xe2\x80\xa6");
@@ -123,5 +124,5 @@ bug_detail_window_show(AppContext *ctx, Bug *bug)
     gtk_box_pack_start(GTK_BOX(root), btn_box, FALSE, FALSE, 0);
 
     gtk_widget_show_all(window);
-    load_thread_into_view(GTK_TEXT_VIEW(textview), ctx->cfg, bug->headers);
+    load_thread_from_imap(GTK_TEXT_VIEW(textview), ctx->cfg, bug->headers);
 }
