@@ -9,7 +9,7 @@
 typedef struct {
     AppContext *ctx;
     WebKitWebView *webview;
-    GtkWidget *overlay_bar;
+    GtkWidget *bug_toolbar;
     GtkWidget *bug_label;
     GtkWidget *url_label;
     gint current_bug; /* 0 if none detected */
@@ -116,9 +116,9 @@ on_uri_changed(WebKitWebView *webview, GParamSpec *pspec, gpointer user_data)
         gchar *label = g_strdup_printf("Bug #%d", bc->current_bug);
         gtk_label_set_text(GTK_LABEL(bc->bug_label), label);
         g_free(label);
-        gtk_widget_show_all(bc->overlay_bar);
+        gtk_widget_show_all(bc->bug_toolbar);
     } else {
-        gtk_widget_hide(bc->overlay_bar);
+        gtk_widget_hide(bc->bug_toolbar);
     }
 }
 
@@ -154,6 +154,20 @@ on_home_clicked(GtkButton *btn, gpointer user_data)
     webkit_web_view_load_uri(bc->webview, BTS_HOME);
 }
 
+static void
+on_open_external_clicked(GtkButton *btn, gpointer user_data)
+{
+    (void) btn;
+    BrowserCtx *bc = user_data;
+    const gchar *uri = webkit_web_view_get_uri(bc->webview);
+    if (!uri) return;
+    GtkWidget *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(bc->webview));
+    GError *error = NULL;
+    gtk_show_uri_on_window(GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : NULL,
+        uri, GDK_CURRENT_TIME, &error);
+    if (error) g_error_free(error); /* not fatal, just couldn't open */
+}
+
 void
 browser_view_load(GtkWidget *view, const gchar *url)
 {
@@ -183,6 +197,10 @@ browser_view_new(AppContext *ctx)
     GtkWidget *home_btn = gtk_button_new_from_icon_name("go-home-symbolic", GTK_ICON_SIZE_BUTTON);
     g_signal_connect(home_btn, "clicked", G_CALLBACK(on_home_clicked), bc);
 
+    GtkWidget *external_btn = gtk_button_new_from_icon_name("web-browser-symbolic", GTK_ICON_SIZE_BUTTON);
+    gtk_widget_set_tooltip_text(external_btn, "Open this page in your system browser");
+    g_signal_connect(external_btn, "clicked", G_CALLBACK(on_open_external_clicked), bc);
+
     bc->url_label = gtk_label_new(BTS_HOME);
     gtk_label_set_xalign(GTK_LABEL(bc->url_label), 0.0);
     gtk_label_set_ellipsize(GTK_LABEL(bc->url_label), PANGO_ELLIPSIZE_MIDDLE);
@@ -193,12 +211,41 @@ browser_view_new(AppContext *ctx)
     gtk_box_pack_start(GTK_BOX(navbar), reload_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(navbar), home_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(navbar), bc->url_label, TRUE, TRUE, 6);
+    gtk_box_pack_start(GTK_BOX(navbar), external_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(root), navbar, FALSE, FALSE, 0);
 
-    /* the real page, plus a floating toolbar for bug pages */
-    GtkWidget *overlay = gtk_overlay_new();
+    /* a plain bar above the page for bug pages - NOT a GtkOverlay.
+     * compositing a floating child over a WebKitWebView's own draw
+     * surface is what was corrupting the heap; a sibling bar just
+     * pushes the page down instead, and never touches its draw path. */
+    bc->bug_toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_style_context_add_class(gtk_widget_get_style_context(bc->bug_toolbar), "debts-bug-toolbar");
+    gtk_widget_set_no_show_all(bc->bug_toolbar, TRUE); /* hidden until a bug shows up */
+
+    bc->bug_label = gtk_label_new("");
+    gtk_style_context_add_class(gtk_widget_get_style_context(bc->bug_label), "debts-bug-toolbar-label");
+    gtk_box_pack_start(GTK_BOX(bc->bug_toolbar), bc->bug_label, FALSE, FALSE, 4);
+
+    GtkWidget *reply_btn = gtk_button_new_with_label("Reply\xE2\x80\xA6");
+    g_signal_connect(reply_btn, "clicked", G_CALLBACK(on_reply_clicked), bc);
+    gtk_box_pack_start(GTK_BOX(bc->bug_toolbar), reply_btn, FALSE, FALSE, 0);
+
+    GtkWidget *retitle_btn = gtk_button_new_with_label("Retitle\xE2\x80\xA6");
+    g_signal_connect(retitle_btn, "clicked", G_CALLBACK(on_retitle_clicked), bc);
+    gtk_box_pack_start(GTK_BOX(bc->bug_toolbar), retitle_btn, FALSE, FALSE, 0);
+
+    GtkWidget *severity_btn = gtk_button_new_with_label("Severity\xE2\x80\xA6");
+    g_signal_connect(severity_btn, "clicked", G_CALLBACK(on_severity_clicked), bc);
+    gtk_box_pack_start(GTK_BOX(bc->bug_toolbar), severity_btn, FALSE, FALSE, 0);
+
+    GtkWidget *more_btn = gtk_button_new_with_label("More Commands\xE2\x80\xA6");
+    g_signal_connect(more_btn, "clicked", G_CALLBACK(on_more_commands_clicked), bc);
+    gtk_box_pack_start(GTK_BOX(bc->bug_toolbar), more_btn, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(root), bc->bug_toolbar, FALSE, TRUE, 0);
+
+    /* the real page - a plain sibling now, no overlay compositing over it */
     bc->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
-    gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(bc->webview));
     g_signal_connect(bc->webview, "notify::uri", G_CALLBACK(on_uri_changed), bc);
 
     /* GPU compositing crashes on some systems, software render is safer */
@@ -206,36 +253,7 @@ browser_view_new(AppContext *ctx)
     webkit_settings_set_hardware_acceleration_policy(settings,
         WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
 
-    bc->overlay_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_style_context_add_class(gtk_widget_get_style_context(bc->overlay_bar), "debts-bug-toolbar");
-    gtk_widget_set_halign(bc->overlay_bar, GTK_ALIGN_END);
-    gtk_widget_set_valign(bc->overlay_bar, GTK_ALIGN_START);
-    gtk_widget_set_margin_top(bc->overlay_bar, 12);
-    gtk_widget_set_margin_end(bc->overlay_bar, 12);
-    gtk_widget_set_no_show_all(bc->overlay_bar, TRUE); /* hidden until a bug shows up */
-
-    bc->bug_label = gtk_label_new("");
-    gtk_style_context_add_class(gtk_widget_get_style_context(bc->bug_label), "debts-bug-toolbar-label");
-    gtk_box_pack_start(GTK_BOX(bc->overlay_bar), bc->bug_label, FALSE, FALSE, 4);
-
-    GtkWidget *reply_btn = gtk_button_new_with_label("Reply\xE2\x80\xA6");
-    g_signal_connect(reply_btn, "clicked", G_CALLBACK(on_reply_clicked), bc);
-    gtk_box_pack_start(GTK_BOX(bc->overlay_bar), reply_btn, FALSE, FALSE, 0);
-
-    GtkWidget *retitle_btn = gtk_button_new_with_label("Retitle\xE2\x80\xA6");
-    g_signal_connect(retitle_btn, "clicked", G_CALLBACK(on_retitle_clicked), bc);
-    gtk_box_pack_start(GTK_BOX(bc->overlay_bar), retitle_btn, FALSE, FALSE, 0);
-
-    GtkWidget *severity_btn = gtk_button_new_with_label("Severity\xE2\x80\xA6");
-    g_signal_connect(severity_btn, "clicked", G_CALLBACK(on_severity_clicked), bc);
-    gtk_box_pack_start(GTK_BOX(bc->overlay_bar), severity_btn, FALSE, FALSE, 0);
-
-    GtkWidget *more_btn = gtk_button_new_with_label("More Commands\xE2\x80\xA6");
-    g_signal_connect(more_btn, "clicked", G_CALLBACK(on_more_commands_clicked), bc);
-    gtk_box_pack_start(GTK_BOX(bc->overlay_bar), more_btn, FALSE, FALSE, 0);
-
-    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), bc->overlay_bar);
-    gtk_box_pack_start(GTK_BOX(root), overlay, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(root), GTK_WIDGET(bc->webview), TRUE, TRUE, 0);
 
     g_object_set_data_full(G_OBJECT(root), "browser-ctx", bc, g_free);
 

@@ -60,6 +60,8 @@ main(int argc, char **argv)
 {
     /* GPU compositing crashes on some systems, keep it off */
     g_setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", FALSE);
+    g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", FALSE);
+    g_setenv("LIBGL_ALWAYS_SOFTWARE", "1", FALSE);
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
