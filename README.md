@@ -6,26 +6,25 @@ IMAP/SMTP mail account - and for reading and searching, it opens the real
 bugs.debian.org in an embedded browser tab, so you're always looking at
 the actual site, not a scraped copy.
 
-Styling is modeled on tracker.debian.org: crimson boxed panels, a plain
-white page, and blue primary action buttons.
+Styling is made to be like tracker.debian.org
 
 ## Features
 
 - **First run**: log in with your mail account, or continue as a guest
-  (guest mode can still browse and search - it just can't send mail).
+  (guest mode can still browse and search, it just can't send mail).
 - **Bug list**: bugs found in your mail folder, plus (once logged in)
   bugs tied to your email pulled from the public UDD mirror
-  (udd-mirror.debian.net) - a real, structured, public copy of Debian's
-  own bug database, not scraped HTML - with an All/Open/Done filter and
+  (udd-mirror.debian.net) a structured, public copy of Debian's
+  own bug database, not scraped HTML, with an All/Open/Done filter and
   a "jump to bug #" box.
 - **Browse BTS tab**: a real embedded browser (WebKit) pointed at
-  bugs.debian.org. Search results, bug pages, everything - it's the
+  bugs.debian.org. Search results, bug pages, everything, it's the
   actual site. When the page you're on is a bug report, a floating
   toolbar appears with Reply, Retitle, Severity, and More Commands
   buttons that open the matching native form, pre-filled with that bug's
   number.
 - **Search window**: the same filters pkgreport.cgi supports (package,
-  source, maintainer, submitter, severity, status, tag, owner) - hitting
+  source, maintainer, submitter, severity, status, tag, owner) hitting
   Search opens the real results page in the Browse tab.
 - **File a new bug**: package chooser (editable dropdown of Debian's
   pseudo-packages, with an (i) button linking to Debian's explanation
