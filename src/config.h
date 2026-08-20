@@ -9,7 +9,7 @@ typedef struct {
     gboolean imap_ssl;
     gchar *imap_user;
     gchar *imap_pass;
-    gchar *imap_folder;      /* folder to scan for BTS mail, e.g. "INBOX" or "INBOX.Debian-BTS" */
+    gchar *imap_folder;   /* folder with bug mail */
 
     gchar *smtp_host;
     gint   smtp_port;
@@ -19,12 +19,14 @@ typedef struct {
 
     gchar *from_name;
     gchar *from_email;
+
+    gboolean setup_done; /* first-run screen shown */
 } AppConfig;
 
-/* Loads config from $XDG_CONFIG_HOME/debts/config.ini (or defaults if missing). */
+/* Loads saved settings, or defaults. */
 AppConfig *config_load(void);
 
-/* Persists config to disk with 0600 permissions (contains credentials). */
+/* Saves settings to disk. */
 gboolean config_save(AppConfig *cfg, GError **error);
 
 void config_free(AppConfig *cfg);

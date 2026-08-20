@@ -3,6 +3,7 @@
 #include "app_context.h"
 #include "config.h"
 #include "main_window.h"
+#include "login_window.h"
 #include "bug.h"
 #include "mailer.h"
 
@@ -12,8 +13,7 @@ load_css(void)
     GtkCssProvider *provider = gtk_css_provider_new();
     GError *error = NULL;
 
-    /* Look next to the binary first (installed layout), then in the build
-     * tree (running from the source directory during development). */
+    /* checks the installed path, then the build tree */
     const gchar *candidates[] = {
         "/usr/share/debts/style.css",
         "data/style.css",
@@ -37,16 +37,32 @@ load_css(void)
 }
 
 static void
+show_main_window(AppContext *ctx)
+{
+    main_window_show(ctx);
+}
+
+static void
 on_activate(GtkApplication *app, gpointer user_data)
 {
     AppContext *ctx = user_data;
     ctx->app = app;
-    main_window_show(ctx);
+
+    if (!ctx->cfg->setup_done) {
+        login_window_show(ctx, show_main_window);
+    } else {
+        show_main_window(ctx);
+    }
 }
 
 int
 main(int argc, char **argv)
 {
+    /* GPU compositing crashes on some systems, keep it off */
+    g_setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", FALSE);
+    g_setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", FALSE);
+    g_setenv("LIBGL_ALWAYS_SOFTWARE", "1", FALSE);
+
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     AppContext ctx = {0};

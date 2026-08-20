@@ -51,6 +51,8 @@ config_load(void)
     cfg->from_name   = dup_or_default(kf, "Identity", "name", "");
     cfg->from_email  = dup_or_default(kf, "Identity", "email", "");
 
+    cfg->setup_done  = have_file ? g_key_file_get_boolean(kf, "App", "setup_done", NULL) : FALSE;
+
     g_key_file_free(kf);
     g_free(path);
     return cfg;
@@ -86,10 +88,12 @@ config_save(AppConfig *cfg, GError **error)
     g_key_file_set_string(kf, "Identity", "name", cfg->from_name);
     g_key_file_set_string(kf, "Identity", "email", cfg->from_email);
 
+    g_key_file_set_boolean(kf, "App", "setup_done", cfg->setup_done);
+
     gchar *path = config_path();
     gboolean ok = g_key_file_save_to_file(kf, path, error);
     if (ok) {
-        /* config contains credentials in plaintext - restrict permissions */
+        /* has a password, keep it private */
         chmod(path, S_IRUSR | S_IWUSR);
     }
     g_free(path);

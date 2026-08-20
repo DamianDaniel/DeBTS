@@ -13,6 +13,8 @@ typedef struct {
     GtkListStore   *bug_store;   /* columns: see mainwindow.c BugCol enum */
     GList          *headers;     /* GList<MailHeader*>, last fetch, owns memory */
     GList          *bugs;        /* GList<Bug*>, derived from `headers`, owns memory */
+    GtkWidget      *content_stack; /* switches between bug list and browser */
+    GtkWidget      *browser_view;  /* embedded BTS browser widget */
 } AppContext;
 
 #endif /* BTS_APP_CONTEXT_H */

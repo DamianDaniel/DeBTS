@@ -2,6 +2,7 @@
 #include "packages.h"
 #include "mailer.h"
 #include "control.h"
+#include "templates.h"
 
 static const gchar *severities[] = {
     "critical", "grave", "serious", "important",
@@ -17,6 +18,7 @@ typedef struct {
     GtkWidget *package_combo; /* new-bug only */
     GtkWidget *version_entry; /* new-bug only */
     GtkWidget *severity_combo; /* new-bug only */
+    GtkWidget *template_combo; /* new-bug only */
     GtkWidget *subject_entry;
     GtkWidget *cc_entry;
     GtkTextView *body_view;
@@ -29,6 +31,43 @@ on_info_clicked(GtkButton *btn, gpointer user_data)
     (void) btn;
     ComposeCtx *cc = user_data;
     packages_open_info_page(GTK_WINDOW(cc->window));
+}
+
+static void
+on_template_changed(GtkComboBox *combo, gpointer user_data)
+{
+    ComposeCtx *cc = user_data;
+    gint idx = gtk_combo_box_get_active(combo);
+    if (idx < 0 || idx >= bts_templates_count) return;
+    const BugTemplate *t = &bts_templates[idx];
+
+    GtkTextBuffer *buf = gtk_text_view_get_buffer(cc->body_view);
+    gtk_text_buffer_set_text(buf, t->body, -1);
+
+    if (t->package_hint) {
+        GtkWidget *entry = gtk_bin_get_child(GTK_BIN(cc->package_combo));
+        gtk_entry_set_text(GTK_ENTRY(entry), t->package_hint);
+    }
+    if (t->severity_hint) {
+        gchar *sev_id = g_strdup(t->severity_hint);
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(cc->severity_combo));
+        GtkTreeIter iter;
+        gint i = 0;
+        if (gtk_tree_model_get_iter_first(model, &iter)) {
+            do {
+                gchar *text = NULL;
+                gtk_tree_model_get(model, &iter, 0, &text, -1);
+                if (text && g_strcmp0(text, sev_id) == 0) {
+                    gtk_combo_box_set_active(GTK_COMBO_BOX(cc->severity_combo), i);
+                    g_free(text);
+                    break;
+                }
+                g_free(text);
+                i++;
+            } while (gtk_tree_model_iter_next(model, &iter));
+        }
+        g_free(sev_id);
+    }
 }
 
 static void
@@ -139,6 +178,15 @@ compose_window_open(AppContext *ctx, gboolean is_new_bug, gint bug_number, const
     gint row = 0;
 
     if (is_new_bug) {
+        GtkWidget *tmpl_label = gtk_label_new("Template");
+        gtk_label_set_xalign(GTK_LABEL(tmpl_label), 0.0);
+        gtk_grid_attach(GTK_GRID(grid), tmpl_label, 0, row, 1, 1);
+        cc->template_combo = gtk_combo_box_text_new();
+        for (int i = 0; i < bts_templates_count; i++)
+            gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cc->template_combo), bts_templates[i].name);
+        gtk_grid_attach(GTK_GRID(grid), cc->template_combo, 1, row, 1, 1);
+        row++;
+
         GtkWidget *pkg_label = gtk_label_new("Package");
         gtk_label_set_xalign(GTK_LABEL(pkg_label), 0.0);
         gtk_grid_attach(GTK_GRID(grid), pkg_label, 0, row, 1, 1);
@@ -172,6 +220,8 @@ compose_window_open(AppContext *ctx, gboolean is_new_bug, gint bug_number, const
         gtk_combo_box_set_active(GTK_COMBO_BOX(cc->severity_combo), 4); /* normal */
         gtk_grid_attach(GTK_GRID(grid), cc->severity_combo, 1, row, 1, 1);
         row++;
+
+        g_signal_connect(cc->template_combo, "changed", G_CALLBACK(on_template_changed), cc);
     }
 
     GtkWidget *subj_label = gtk_label_new(is_new_bug ? "Title" : "Subject");
